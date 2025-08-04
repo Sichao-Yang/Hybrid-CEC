@@ -196,7 +196,7 @@ void Sweep::recalculate_outs() {
     }
 }
 
-inline int Sweep::find_par(int x) {
+int Sweep::find_par(int x) {
     return x == par[x] ? x : (par[x] = find_par(par[x]));
 }
 
