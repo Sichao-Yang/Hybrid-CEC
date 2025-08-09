@@ -3,15 +3,18 @@
 #include "sweep.hpp"
 #include <unordered_map>
 
-class BitsetPool {
+class BitsetPool
+{
 public:
   std::queue<Bitset *> freeList;
   std::unordered_set<Bitset *> allocatedSet;
   int w;
   int total_mem_mb = 0;
-  void expand() {
+  void expand()
+  {
     const int n = 200;
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
+    {
       Bitset *p = new Bitset();
       p->allocate(w);
       freeList.push(p);
@@ -19,20 +22,24 @@ public:
     // printf("c bitset pool expand n:%d w:%d\n", n, w);
     total_mem_mb += n * (w / 1024 / 1024 / 8);
   }
-  void init(int _w) {
+  void init(int _w)
+  {
     w = _w;
     expand();
   }
-  ~BitsetPool() {
+  ~BitsetPool()
+  {
     clear();
-    while (!freeList.empty()) {
+    while (!freeList.empty())
+    {
       auto p = freeList.front();
       freeList.pop();
       p->free();
       delete p;
     }
   }
-  Bitset *allocate() {
+  Bitset *allocate()
+  {
     if (freeList.empty())
       expand();
     Bitset *res = freeList.front();
@@ -40,24 +47,29 @@ public:
     freeList.pop();
     return res;
   }
-  void release(Bitset *p) {
+  void release(Bitset *p)
+  {
     allocatedSet.erase(p);
     freeList.push(p);
   }
-  void clear() {
-    for (auto &p : allocatedSet) {
+  void clear()
+  {
+    for (auto &p : allocatedSet)
+    {
       freeList.push(p);
     }
     allocatedSet.clear();
   }
 } global_pool;
 
-bool Sweep::_simulate(Bitset **result, void *_pool) {
+bool Sweep::_simulate(Bitset **result, void *_pool)
+{
 
   BitsetPool *pool = (BitsetPool *)_pool;
 
   int *fanouts = new int[maxvar + 1];
-  for (int i = 1; i <= maxvar; i++) {
+  for (int i = 1; i <= maxvar; i++)
+  {
     used[i] = 0;
     fanouts[i] = inv_C[i].size();
   }
@@ -66,7 +78,8 @@ bool Sweep::_simulate(Bitset **result, void *_pool) {
 
   std::queue<int> q;
 
-  for (int i = 0; i < epcec_in.size(); i++) {
+  for (int i = 0; i < epcec_in.size(); i++)
+  {
     assert(active[epcec_in[i]]);
     q.push(epcec_in[i]);
     used[epcec_in[i]] = 2;
@@ -74,20 +87,23 @@ bool Sweep::_simulate(Bitset **result, void *_pool) {
 
   int o = output >> 1;
 
-  while (!q.empty()) {
+  while (!q.empty())
+  {
     int u = q.front();
     q.pop();
 
     int flag = 1;
     for (int i = 0; i < epcec_out.size(); i++)
-      if (!used[epcec_out[i]]) {
+      if (!used[epcec_out[i]])
+      {
         flag = 0;
         break;
       }
     if (flag)
       break;
 
-    for (int i = 0; i < inv_C[u].size(); i++) {
+    for (int i = 0; i < inv_C[u].size(); i++)
+    {
       int c = inv_C[u][i];
       if (++topo_counter[c] != gate[c].ins)
         continue;
@@ -99,7 +115,8 @@ bool Sweep::_simulate(Bitset **result, void *_pool) {
 
       q.push(v), used[v] = 1;
       result[v] = pool->allocate();
-      if (gate[c].ins == 1) {
+      if (gate[c].ins == 1)
+      {
         int l1 = gate[c][0], v1 = abs(l1);
         result[v]->eqs(*result[v1], sign(gate[c].out) * sign(l1));
         fanouts[v1]--;
@@ -123,27 +140,34 @@ bool Sweep::_simulate(Bitset **result, void *_pool) {
   }
 
   bool res = true;
-  if (epcec_out.size() == 2) {
+  if (epcec_out.size() == 2)
+  {
     Bitset *bitx = result[epcec_out[0]];
     Bitset *bity = result[epcec_out[1]];
     for (int i = 0; i < bitx->m_size; i++)
-      if (bitx->array[i] != bity->array[i]) {
+      if (bitx->array[i] != bity->array[i])
+      {
         res = false;
         break;
       }
-  } else {
+  }
+  else
+  {
     Bitset &bit = *result[o];
     if (output & 1)
       bit.flip();
     for (int i = 0; i < bit.m_size; i++)
       if (bit.array[i] != 0)
         res = false;
-    if (!res) {
-      for (int i = 0; i < bit.m_size * 64; i++) {
+    if (!res)
+    {
+      for (int i = 0; i < bit.m_size * 64; i++)
+      {
         if (bit[i] == 0)
           continue;
         int input_vector[inputs];
-        for (int j = 0; j < inputs; j++) {
+        for (int j = 0; j < inputs; j++)
+        {
           input_vector[j] = (*result[input[j]])[i];
         }
         is_sat = true;
@@ -155,7 +179,8 @@ bool Sweep::_simulate(Bitset **result, void *_pool) {
   return res;
 }
 
-bool Sweep::epcec(bool exact) {
+bool Sweep::epcec(bool exact)
+{
   // printf("c %cpcec checking with PI: ", exact ? 'e' : ' ');
   Bitset **result = new Bitset *[maxvar + 1];
   int num_inputs = epcec_in.size();
@@ -164,34 +189,42 @@ bool Sweep::epcec(bool exact) {
   pool.init(1LL << std::max(6, std::min(maxR, num_inputs)));
 
   // 生成完整输入pattern
-  if (num_inputs > maxR) {
+  if (num_inputs > maxR)
+  {
     int extra_len = num_inputs - maxR;
     // 创建一个二进制数，用来枚举所有超过 maxR 位的，那些位的取值
     ull extra_values = 0;
-    while (extra_values < (1LL << (extra_len))) {
+    while (extra_values < (1LL << (extra_len)))
+    {
       // printf("c epcec round [%d / %d]\n", extra_values, (1LL <<
       // (extra_len)));
-      for (int i = 0; i < num_inputs; i++) {
+      for (int i = 0; i < num_inputs; i++)
+      {
         result[epcec_in[i]] = pool.allocate();
       }
-      for (int i = 0; i < extra_len; i++) {
+      for (int i = 0; i < extra_len; i++)
+      {
         int input_var = epcec_in[i];
         ull val = extra_values & (1LL << (extra_len - i - 1));
         if (val != 0)
           val = ~(val = 0);
-        for (int j = 0; j < result[input_var]->m_size; j++) {
+        for (int j = 0; j < result[input_var]->m_size; j++)
+        {
           result[input_var]->array[j] = val;
         }
       }
       int sz = 1 << maxR;
       int unit = sz;
-      for (int i = extra_len; i < num_inputs; i++) {
+      for (int i = extra_len; i < num_inputs; i++)
+      {
         int input_var = epcec_in[i];
         unit >>= 1;
-        if (unit >= 64) {
+        if (unit >= 64)
+        {
           const ull all_zero = 0;
           const ull all_one = ~all_zero;
-          for (int j = 0; j < sz / 64; j++) {
+          for (int j = 0; j < sz / 64; j++)
+          {
             int value = (j * 64 / unit) % 2;
             assert(j < result[input_var]->m_size);
             if (value)
@@ -199,8 +232,11 @@ bool Sweep::epcec(bool exact) {
             else
               result[input_var]->array[j] = all_zero;
           }
-        } else {
-          for (int j = 0; j < 64; j++) {
+        }
+        else
+        {
+          for (int j = 0; j < 64; j++)
+          {
             int value = (j >> (num_inputs - i - 1)) & 1;
             if (value)
               result[input_var]->reset(j);
@@ -208,7 +244,8 @@ bool Sweep::epcec(bool exact) {
               result[input_var]->set(j);
           }
 
-          for (int j = 1; j < sz / 64; j++) {
+          for (int j = 1; j < sz / 64; j++)
+          {
             result[input_var]->array[j] = result[input_var]->array[0];
           }
         }
@@ -219,55 +256,77 @@ bool Sweep::epcec(bool exact) {
       if (!res)
         return 0;
     }
-  } else if (num_inputs > 6) {
-    for (int i = 0; i < num_inputs; i++) {
+  }
+  else if (num_inputs > 6)
+  {
+    for (int i = 0; i < num_inputs; i++)
+    {
       result[epcec_in[i]] = pool.allocate();
     }
-    int sz = 1 << epcec_in.size();
+    int sz = 1 << epcec_in.size(); // 2^n
     int unit = sz;
-    for (int i = 0; i < epcec_in.size(); i++) {
+    for (int i = 0; i < epcec_in.size(); i++)
+    {
+      // 循环对每个input赋值
       int input_var = epcec_in[i];
-      unit >>= 1;
-      if (unit >= 64) {
+      unit >>= 1; // 每次除以2，得到每个input的赋值间隔（第一个最大，也就是2^n的一半是0一半是1）
+      if (unit >= 64)
+      {
+        // 如果大于64就说明每个间隔至少是64的倍数，所以就可以64个比特一整个word来赋值
         const ull all_zero = 0;
         const ull all_one = ~all_zero;
-        for (int j = 0; j < sz / 64; j++) {
+        // 一个word一个word的走
+        for (int j = 0; j < sz / 64; j++)
+        {
+          // 除以赋值间隔来得到当前的赋值区间，偶数赋全0，奇数赋全1
           int value = (j * 64 / unit) % 2;
           if (value)
             result[input_var]->array[j] = all_one;
           else
             result[input_var]->array[j] = all_zero;
         }
-      } else {
-        for (int j = 0; j < 64; j++) {
+      }
+      else
+      {
+        // 对于赋值间隔小于64的，依然是一个word一个word的走，而且所有word都是一样的赋值
+        // 因为64下面最大的间隔也是32，是包含了一个完整的00001111的
+        // 对第0个word的赋值操作和下面num_inputs<=6的逻辑是一样的
+        for (int j = 0; j < 64; j++)
+        {
           int value = (j >> (num_inputs - i - 1)) & 1;
           if (value)
             result[input_var]->reset(j);
           else
             result[input_var]->set(j);
         }
-
-        for (int j = 1; j < sz / 64; j++) {
+        for (int j = 1; j < sz / 64; j++)
+        {
           result[input_var]->array[j] = result[input_var]->array[0];
         }
       }
     }
     return _simulate(result, &pool);
-  } else {
+  }
+  else
+  {
     assert(num_inputs <= 6);
-    for (int i = 0; i < num_inputs; i++) {
+    for (int i = 0; i < num_inputs; i++)
+    {
       result[epcec_in[i]] = pool.allocate();
     }
     // printf("\n");
     // 给每个输入生成完整的pattern
-    for (int i = 0; i < num_inputs; i++) {
+    for (int i = 0; i < num_inputs; i++)
+    {
       assert(result[epcec_in[i]]->m_size == 1); // 2^6 == 64 = 1 word
       ull s = 0;
       // 循环2^n次
-      for (int j = 0; j < (1LL << num_inputs); j++) {
+      for (int j = 0; j < (1LL << num_inputs); j++)
+      {
         s <<= 1;
         // 如果i=0，inputs=3这里就是2,也就是2^2=4，4个数4个数的变，因为3个数循环2^3=8次，所以结果就是00001111
-        if (j & (1 << (num_inputs - i - 1))) {
+        if (j & (1 << (num_inputs - i - 1)))
+        {
           s |= 1;
         }
       }
@@ -284,13 +343,17 @@ bool Sweep::epcec(bool exact) {
   return true;
 }
 
-bool Sweep::pcec() {
+bool Sweep::pcec()
+{
   auto clk_st = std::chrono::high_resolution_clock::now();
   int R, w;
-  if (rounds > 20) {
+  if (rounds > 20)
+  {
     rounds = 1 << (rounds - 20);
     R = 20;
-  } else {
+  }
+  else
+  {
     R = rounds;
     rounds = 1;
   }
@@ -322,7 +385,8 @@ bool Sweep::pcec() {
   std::vector<std::vector<int>> classes;
   classes.push_back(std::vector<int>());
 
-  for (int i = 1; i <= maxvar; i++) {
+  for (int i = 1; i <= maxvar; i++)
+  {
     int c = cell[i].gate;
     if (!c || gate[c].type == UNUSE)
       continue;
@@ -332,10 +396,12 @@ bool Sweep::pcec() {
   int *fanouts = new int[maxvar + 1];
 
   for (int rd = 0; rd < rounds;
-       rd++) { // 如果初始rounds<=20，这里其实就只有一个迭代
+       rd++)
+  { // 如果初始rounds<=20，这里其实就只有一个迭代
     std::unordered_map<int, ull> HashV;
 
-    for (int i = 1; i <= maxvar; i++) {
+    for (int i = 1; i <= maxvar; i++)
+    {
       topo_counter[i] = 0;
       fanouts[i] = inv_V[i].size();
     }
@@ -343,7 +409,8 @@ bool Sweep::pcec() {
     global_pool.clear();
 
     // printf("c random test round [%d / %d]\n", rd + 1, rounds);
-    for (int i = 0; i < inputs; i++) {
+    for (int i = 0; i < inputs; i++)
+    {
       int input_var = input[i];
       result[input_var] = global_pool.allocate();
       result[input_var]->random();
@@ -354,15 +421,18 @@ bool Sweep::pcec() {
     // printf("c time1: %d\n",
     // std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()
     // - clk_st).count());
-    while (!q.empty()) {
+    while (!q.empty())
+    {
       int u = q.front();
       q.pop();
-      for (int i = 0; i < inv_C[u].size(); i++) {
+      for (int i = 0; i < inv_C[u].size(); i++)
+      {
         int c = inv_C[u][i];
         int v = abs(gate[c].out);
         topo_counter[c]++;
         assert(gate[c].ins == 2);
-        if (topo_counter[c] == gate[c].ins) {
+        if (topo_counter[c] == gate[c].ins)
+        {
           q.push(v);
           result[v] = global_pool.allocate();
           int l1 = gate[c][0], l2 = gate[c][1];
@@ -383,10 +453,13 @@ bool Sweep::pcec() {
           result[v]->hash();
           ull hval = result[v]->hashval;
           HashV[v] = hval;
-          if (hval == zero_val && v != o) {
+          if (hval == zero_val && v != o)
+          {
             if (*result[v] == B)
               zero.push(v);
-          } else if (hval == one_val && v != o) {
+          }
+          else if (hval == one_val && v != o)
+          {
             if (*result[v] == A)
               one.push(v);
           }
@@ -397,18 +470,22 @@ bool Sweep::pcec() {
     // printf("c classes-size: %d\n", classes.size());
 
     std::vector<std::vector<int>> _classes;
-    for (int i = 0; i < classes.size(); i++) {
+    for (int i = 0; i < classes.size(); i++)
+    {
       std::vector<int> &c = classes[i];
       std::unordered_map<ull, std::vector<int>> mp;
-      for (int j = 0; j < c.size(); j++) {
+      for (int j = 0; j < c.size(); j++)
+      {
         int var = c[j];
         mp[HashV[var]].push_back(var);
       }
 
-      for (auto &[k, v] : mp) {
+      for (auto &[k, v] : mp)
+      {
         if (v.size() <= 1)
           continue;
-        if (v.size() >= 20) {
+        if (v.size() >= 20)
+        {
           // printf("c skip too large class!");
           continue;
         }
@@ -421,11 +498,13 @@ bool Sweep::pcec() {
     Bitset &res = *result[o];
     if (output & 1)
       res.flip();
-    for (int i = 0; i < w; i++) {
+    for (int i = 0; i < w; i++)
+    {
       if (res[i] == 0)
         continue;
       int input_vector[inputs];
-      for (int j = 0; j < inputs; j++) {
+      for (int j = 0; j < inputs; j++)
+      {
         input_vector[j] = (*result[input[j]])[i];
       }
       is_sat = true;
@@ -462,9 +541,12 @@ analyze_result:
   //     printf("}\n");
   // }
 
-  for (auto &V : classes) {
-    for (int j = 0; j < V.size(); j++) {
-      for (int k = j + 1; k < V.size(); k++) {
+  for (auto &V : classes)
+  {
+    for (int j = 0; j < V.size(); j++)
+    {
+      for (int k = j + 1; k < V.size(); k++)
+      {
         equal_pairs.push_back(
             std::make_pair(std::max(topo_index[V[j]], topo_index[V[k]]),
                            std::make_pair(V[j], V[k])));
@@ -534,7 +616,8 @@ analyze_result:
     4. Return overall equivalence result
 }
  */
-bool Sweep::seq_CEC() {
+bool Sweep::seq_CEC()
+{
   // printf("use time: %d\n\n",
   // std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()
   // - clk_st).count()); printf("c sequential mode\n"); printf("c checkpair (%d,
@@ -547,7 +630,8 @@ bool Sweep::seq_CEC() {
   for (int i = 0; i < equal_pairs.size(); i++)
     task_sign[i] = -1;
   // pre_seq_CEC();
-  for (int i = 0; i < equal_pairs.size(); i++) {
+  for (int i = 0; i < equal_pairs.size(); i++)
+  {
     auto clk_ste = std::chrono::high_resolution_clock::now();
     if (task_sign[i] != -1)
       continue;
@@ -557,18 +641,21 @@ bool Sweep::seq_CEC() {
     int x = pr.second.first, y = pr.second.second;
     // printf("c [%d/%d] trying to prove equivalance of pair (%d, %d) (size: %d
     // %d)\n", i+1, equal_pairs.size(), x, y, size[x], size[y]);
-    if (!active[x] || !active[y]) {
+    if (!active[x] || !active[y])
+    {
       // printf("c can skip cs not active +++++++++++++++++++++++++++\n");
       info.pairs_act++;
       continue;
     }
     int mx = M[size[x]], my = M[size[y]];
     int c1 = cell[x].gate, c2 = cell[y].gate;
-    if (mx == my && mx) {
+    if (mx == my && mx)
+    {
       int px = verified_pairs[mx].first;
       int py = verified_pairs[mx].second;
       if ((check_var_struct(x, px) && check_var_struct(y, py)) ||
-          (check_var_struct(y, px) && check_var_struct(x, py))) {
+          (check_var_struct(y, px) && check_var_struct(x, py)))
+      {
         info.pairs_stru++;
         eq = 1;
         // printf("c can skip cs struct equal =============================\n");
@@ -576,14 +663,16 @@ bool Sweep::seq_CEC() {
       }
     }
 
-    if (gate[c1].type == gate[c2].type && gate[c1].ins) {
+    if (gate[c1].type == gate[c2].type && gate[c1].ins)
+    {
       int a = gate[c1][0], b = gate[c1][1], c = gate[c2][0], d = gate[c2][1];
       if (a == c && b == d)
         eq = 1;
       if (a == d && b == c)
         eq = 1;
 
-      if (eq == 1) {
+      if (eq == 1)
+      {
         info.pairs_fanin++;
         // printf("c can skip cs fanin equal ******************************\n");
         goto verified;
@@ -597,14 +686,18 @@ bool Sweep::seq_CEC() {
                           std::chrono::high_resolution_clock::now() - clk_ste)
                           .count() *
                       0.001;
-    if (this_epcec == 1) {
+    if (this_epcec == 1)
+    {
       info.pairs_ec++;
       info.times_ec += use_time;
-    } else if (this_epcec == 2) {
+    }
+    else if (this_epcec == 2)
+    {
       info.pairs_sat++;
       info.times_sat += use_time;
     }
-    if (eq == 1) {
+    if (eq == 1)
+    {
       info.pairs_ver++;
       if (this_epcec == 1)
         info.pairs_ec_ver++;
