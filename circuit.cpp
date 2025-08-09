@@ -99,19 +99,25 @@ void Sweep::cal_size() {
 }
 
 // x, y -> z, z, a -> b; z = 0
-
 int Sweep::merge(int x, int y) {
+  // 1. Ensure x is processed before y (topological order)
+  // 2. Redirect all gates using y to use x instead
+  // 3. Handle special cases (self-loops, constant gates)
+  // 4. Propagate deletions using BFS
+  // 5. Return count of deleted variables
   assert(x > 0 && y > 0 && active[x] && active[y]);
   if (topo_index[x] > topo_index[y])
     std::swap(x, y);
   ++stamp;
   for (int i = 0; i < inv_C[x].size(); i++)
-    var_stamp[inv_C[x][i]] = stamp;
+    var_stamp[inv_C[x][i]] = stamp; // Mark gates that use x
+
   for (int i = 0; i < inv_C[y].size(); i++) {
     int c = inv_C[y][i];
     int v = abs(gate[c].out);
     if (!active[v])
       continue;
+    // 把原本依赖y的gate[c]给修改成依赖x了
     if (gate[c].ins == 1) {
       int l1 = gate[c][0];
       assert(abs(l1) == y);
@@ -128,14 +134,15 @@ int Sweep::merge(int x, int y) {
     if (v2 == y)
       gate[c][1] = gate[c][1] > 0 ? x : -x;
     if (var_stamp[c] == stamp) {
+      // Gate c was marked → it already used x, now uses x for both inputs!
       assert(abs(gate[c][0]) == abs(gate[c][1]));
       if (gate[c][0] == gate[c][1]) {
+        // x AND x = x, x XOR x = 0
         gate[c].ins = 1;
         // need simplify
       } else {
-        // printf("\nc wrong\n");
-        // exit(-1);
         // fix_var(gate[c].out);
+        // x AND -x = 0, x XOR -x = 1
         fanout[x]++;
         inv_C[x].push(c);
       }
@@ -144,22 +151,22 @@ int Sweep::merge(int x, int y) {
       inv_C[x].push(c);
     }
   }
-  // return 0;
+
   int l = 1, r = 0;
-  q[++r] = y;
+  q[++r] = y; // Start BFS from y
   while (l <= r) {
-    int u = q[l++];
-    inv_C[u].clear(), fanout[u] = 0, active[u] = 0;
+    int u = q[l++]; // Current variable to delete
+    inv_C[u].clear(), fanout[u] = 0, active[u] = 0; // Delete u
     int c = cell[u].gate;
     for (int i = 0; i < gate[c].ins; i++) {
       int v = abs(gate[c][i]);
       if (!active[v])
         continue;
-      if (!(--fanout[v]))
-        q[++r] = v;
+      if (!(--fanout[v])) // Decrement fanout of v
+        q[++r] = v;       // If v has no more consumers, delete it
     }
   }
-  return r;
+  return r; // Return number of deleted variables
 }
 // y, t -> z
 // x, t -> z 计算拓扑顺序，topo_index里的值越小，越靠近输入
