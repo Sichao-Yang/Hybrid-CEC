@@ -177,8 +177,10 @@ bool Sweep::epcec(bool exact) {
     // 创建一个二进制数，用来枚举所有超过 maxR 位的，那些位的取值
     ull extra_values = 0;
     while (extra_values < (1LL << (extra_len))) {
+      // 循环2次，如果只是多了1个input，4次如果多了2个input，指数递增
       // printf("c epcec round [%d / %d]\n", extra_values, (1LL <<
       // (extra_len)));
+      // 这一块儿是对大于max_R部分input的赋值，要么是000，要么是111，取决于循环的轮次
       for (int i = 0; i < num_inputs; i++) {
         result[epcec_in[i]] = pool.allocate();
       }
@@ -191,6 +193,7 @@ bool Sweep::epcec(bool exact) {
           result[input_var]->array[j] = val;
         }
       }
+      // 和下面的num_inputs > 6是完全一样的
       int sz = 1 << maxR;
       int unit = sz;
       for (int i = extra_len; i < num_inputs; i++) {
@@ -236,8 +239,8 @@ bool Sweep::epcec(bool exact) {
     for (int i = 0; i < epcec_in.size(); i++) {
       // 循环对每个input赋值
       int input_var = epcec_in[i];
-      unit >>=
-          1; // 每次除以2，得到每个input的赋值间隔（第一个最大，也就是2^n的一半是0一半是1）
+      // 每次除以2，得到每个input的赋值间隔（第一个最大，也就是2^n的一半是0一半是1）
+      unit >>= 1;
       if (unit >= 64) {
         // 如果大于64就说明每个间隔至少是64的倍数，所以就可以64个比特一整个word来赋值
         const ull all_zero = 0;
@@ -577,6 +580,7 @@ bool Sweep::seq_CEC() {
       info.pairs_act++;
       continue;
     }
+    // Identical Structure Detection
     int mx = M[size[x]], my = M[size[y]];
     int c1 = cell[x].gate, c2 = cell[y].gate;
     if (mx == my && mx) {
